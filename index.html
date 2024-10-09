@@ -4,93 +4,93 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Isoline Tool</title>
-    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.7.1/dist/leaflet.css" />
+    <!-- Leaflet CSS -->
+    <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css" />
     <style>
         #map {
-            height: 600px;
+            height: 500px;
             width: 100%;
         }
     </style>
 </head>
 <body>
     <h1>Isoline Tool</h1>
-    <div>
-        <label for="lat">Latitude:</label>
-        <input type="number" id="lat" step="any" placeholder="Enter Latitude" required>
-        <label for="lng">Longitude:</label>
-        <input type="number" id="lng" step="any" placeholder="Enter Longitude" required><br><br>
-
-        <label for="time">Time (seconds):</label>
-        <input type="number" id="time" placeholder="Time in Seconds" required>
-        <label for="mode">Travel Mode:</label>
-        <select id="mode">
-            <option value="foot-walking">Walking</option>
-            <option value="driving-car">Car</option>
-        </select><br><br>
-
-        <button id="generate">Generate Isoline</button>
-    </div>
     
+    <!-- File Upload -->
+    <label for="file">Upload CSV:</label>
+    <input type="file" id="file" accept=".csv"><br><br>
+
+    <!-- Manual Inputs -->
+    Latitude: <input type="text" id="latitude" placeholder="Enter Latitude">
+    Longitude: <input type="text" id="longitude" placeholder="Enter Longitude"><br><br>
+    Time (seconds): <input type="text" id="time" placeholder="Time in Seconds">
+    Travel Mode: 
+    <select id="travelMode">
+        <option value="foot-walking">Walking</option>
+        <option value="driving-car">Driving</option>
+    </select><br><br>
+    <button onclick="generateIsoline()">Generate Isoline</button><br><br>
+    
+    <!-- Map -->
     <div id="map"></div>
-
-    <script src="https://unpkg.com/leaflet@1.7.1/dist/leaflet.js"></script>
-    <script src="https://unpkg.com/axios/dist/axios.min.js"></script>
     
+    <!-- Leaflet JS -->
+    <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
+    <!-- Add your OpenRouteService API key -->
     <script>
-        // Step 2: Initialize the Leaflet map
-        var map = L.map('map').setView([25.276987, 55.296249], 13); // Dubai center by default
+        const apiKey = '5b3ce3597851110001cf624856b457044e134081bf40f7428b9a1c68'; // Replace with your actual key
+
+        // Initialize the map
+        var map = L.map('map').setView([25.276987, 55.296249], 10); // Default view set to Dubai
 
         L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-            maxZoom: 19,
+            attribution: '&copy; OpenStreetMap contributors'
         }).addTo(map);
 
-        // Step 3: Function to make API call and draw the isoline
-        function getIsoline(lat, lng, time, mode) {
-            const apiKey = 'your-openrouteservice-api-key'; // Replace with your free API key
+        // Function to parse CSV and generate isoline
+        function generateIsoline() {
+            var lat = document.getElementById('latitude').value;
+            var lng = document.getElementById('longitude').value;
+            var time = document.getElementById('time').value;
+            var travelMode = document.getElementById('travelMode').value;
 
-            const data = {
+            var url = `https://api.openrouteservice.org/v2/isochrones/${travelMode}`;
+            var data = {
                 locations: [[lng, lat]],
-                range: [time], // Time in seconds
-                range_type: 'time',
-                profile: mode
+                range: [time]
             };
 
-            axios.post(`https://api.openrouteservice.org/v2/isochrones/${mode}`, data, {
+            fetch(url, {
+                method: 'POST',
                 headers: {
-                    'Authorization': 5b3ce3597851110001cf624856b457044e134081bf40f7428b9a1c68,
-                    'Content-Type': 'application/json'
-                }
+                    'Content-Type': 'application/json',
+                    'Authorization': apiKey
+                },
+                body: JSON.stringify(data)
             })
-            .then(response => {
-                const isoline = response.data;
-
-                // Remove any existing layers before drawing a new one
-                map.eachLayer(layer => {
-                    if (!!layer.toGeoJSON) {
-                        map.removeLayer(layer);
-                    }
-                });
-
-                // Draw new isoline
-                L.geoJSON(isoline).addTo(map);
+            .then(response => response.json())
+            .then(data => {
+                L.geoJSON(data).addTo(map);
+                map.fitBounds(L.geoJSON(data).getBounds());
             })
-            .catch(error => {
-                console.error('Error fetching isoline:', error);
-            });
+            .catch(error => console.error('Error:', error));
         }
 
-        // Step 4: Event listener for generating isoline
-        document.getElementById('generate').addEventListener('click', function() {
-            const lat = parseFloat(document.getElementById('lat').value);
-            const lng = parseFloat(document.getElementById('lng').value);
-            const time = parseInt(document.getElementById('time').value);
-            const mode = document.getElementById('mode').value;
+        // Handle file upload
+        document.getElementById('file').addEventListener('change', function(event) {
+            var file = event.target.files[0];
+            var reader = new FileReader();
+            reader.onload = function(e) {
+                var csv = e.target.result;
+                var rows = csv.split('\n').map(row => row.split(','));
 
-            if (lat && lng && time && mode) {
-                getIsoline(lat, lng, time, mode);
-            } else {
-                alert('Please fill all the fields');
-            }
+                // Assuming first row is header, process second row
+                var lat = rows[1][1]; // Latitude
+                var lng = rows[1][2]; // Longitude
+                document.getElementById('latitude').value = lat;
+                document.getElementById('longitude').value = lng;
+            };
+            reader.readAsText(file);
         });
     </script>
 </body>
