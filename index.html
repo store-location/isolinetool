@@ -29,7 +29,7 @@
         <option value="foot-walking">Walking</option>
         <option value="driving-car">Driving</option>
     </select><br><br>
-    <button onclick="generateIsoline()">Generate Isoline</button><br><br>
+    <button onclick="generateIsolines()">Generate Isolines</button><br><br>
     
     <!-- Map -->
     <div id="map"></div>
@@ -47,13 +47,35 @@
             attribution: '&copy; OpenStreetMap contributors'
         }).addTo(map);
 
-        // Function to parse CSV and generate isoline
-        function generateIsoline() {
-            var lat = document.getElementById('latitude').value;
-            var lng = document.getElementById('longitude').value;
+        // Function to parse CSV and generate isolines for all locations
+        function generateIsolines() {
             var time = document.getElementById('time').value;
             var travelMode = document.getElementById('travelMode').value;
 
+            document.getElementById('file').addEventListener('change', function(event) {
+                var file = event.target.files[0];
+                var reader = new FileReader();
+                reader.onload = function(e) {
+                    var csv = e.target.result;
+                    var rows = csv.split('\n').map(row => row.split(','));
+
+                    // Loop through all locations
+                    for (let i = 1; i < rows.length; i++) {
+                        var lat = rows[i][1]; // Latitude
+                        var lng = rows[i][2]; // Longitude
+                        var name = rows[i][0]; // Name or label from the CSV (assuming the name is in the first column)
+
+                        if (lat && lng) {
+                            generateIsoline(lat, lng, time, travelMode, name);
+                        }
+                    }
+                };
+                reader.readAsText(file);
+            });
+        }
+
+        // Function to generate an isoline for each location
+        function generateIsoline(lat, lng, time, travelMode, name) {
             var url = `https://api.openrouteservice.org/v2/isochrones/${travelMode}`;
             var data = {
                 locations: [[lng, lat]],
@@ -70,28 +92,12 @@
             })
             .then(response => response.json())
             .then(data => {
-                L.geoJSON(data).addTo(map);
-                map.fitBounds(L.geoJSON(data).getBounds());
+                var isoline = L.geoJSON(data).addTo(map);
+                isoline.bindTooltip(name, {permanent: false, direction: 'top'}); // Show name on hover
+                map.fitBounds(isoline.getBounds());
             })
             .catch(error => console.error('Error:', error));
         }
-
-        // Handle file upload
-        document.getElementById('file').addEventListener('change', function(event) {
-            var file = event.target.files[0];
-            var reader = new FileReader();
-            reader.onload = function(e) {
-                var csv = e.target.result;
-                var rows = csv.split('\n').map(row => row.split(','));
-
-                // Assuming first row is header, process second row
-                var lat = rows[1][1]; // Latitude
-                var lng = rows[1][2]; // Longitude
-                document.getElementById('latitude').value = lat;
-                document.getElementById('longitude').value = lng;
-            };
-            reader.readAsText(file);
-        });
     </script>
 </body>
 </html>
