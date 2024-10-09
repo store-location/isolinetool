@@ -1,105 +1,117 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Isoline Tool</title>
-  <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css" />
-  <style>
-    #map {
-      height: 500px;
-      width: 100%;
-    }
-  </style>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Isoline Tool</title>
+    <!-- Leaflet CSS -->
+    <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css" />
+    <style>
+        #map {
+            height: 500px;
+            width: 100%;
+        }
+    </style>
 </head>
 <body>
-  <h1>Isoline Tool</h1>
-  
-  <label for="file">Upload CSV:</label>
-  <input type="file" id="file" accept=".csv"><br><br>
+    <h1>Isoline Tool</h1>
+    
+    <!-- File Upload -->
+    <label for="file">Upload CSV:</label>
+    <input type="file" id="file" accept=".csv"><br><br>
 
-  Latitude: <input type="text" id="latitude" placeholder="Enter Latitude">
-  Longitude: <input type="text" id="longitude" placeholder="Enter Longitude"><br><br>
-  Time (seconds): <input type="text" id="time" placeholder="Time in Seconds">
-  Travel Mode: 
-  <select id="travelMode">
-    <option value="foot-walking">Walking</option>
-    <option value="driving-car">Driving</option>
-  </select><br><br>
-  <button onclick="generateIsolines()">Generate Isolines</button><br><br>
-  
-  <div id="map"></div>
-  
-  <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
-  <script>
-    const apiKey = '5b3ce3597851110001cf624856b457044e134081bf40f7428b9a1c68'; // Replace with your actual key
+    <!-- Manual Inputs -->
+    Latitude: <input type="text" id="latitude" placeholder="Enter Latitude">
+    Longitude: <input type="text" id="longitude" placeholder="Enter Longitude"><br><br>
+    Time (seconds): <input type="text" id="time" placeholder="Time in Seconds">
+    Travel Mode: 
+    <select id="travelMode">
+        <option value="foot-walking">Walking</option>
+        <option value="driving-car">Driving</option>
+    </select><br><br>
+    <button onclick="generateIsolines()">Generate Isolines</button><br><br>
+    
+    <!-- Map -->
+    <div id="map"></div>
+    
+    <!-- Leaflet JS -->
+    <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
+    <!-- Add your OpenRouteService API key -->
+    <script>
+        const apiKey = '5b3ce3597851110001cf624856b457044e134081bf40f7428b9a1c68'; // Replace with your actual key
 
-    // Initialize the map
-    var map = L.map('map').setView([25.276987, 55.296249], 10); // Default view set to Dubai
+        // Initialize the map
+        var map = L.map('map').setView([25.276987, 55.296249], 10); // Default view set to Dubai
 
-    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-      attribution: '&copy; OpenStreetMap contributors'
-    }).addTo(map);
+        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+            attribution: '&copy; OpenStreetMap contributors'
+        }).addTo(map);
 
-    // Function to parse CSV and generate isolines for all locations
-    function generateIsolines() {
-      // Move event listener outside the function for better performance
-      const fileInput = document.getElementById('file');
-      if (!fileInput.files.length) return; // Handle no file selected
+        let locations = [];
 
-      fileInput.addEventListener('change', function(event) {
-        var file = event.target.files[0];
-        var reader = new FileReader();
-        reader.onload = function(e) {
-          var csv = e.target.result;
-          var rows = csv.split('\n').map(row => row.split(','));
+        // Move file upload handling outside the generate function
+        document.getElementById('file').addEventListener('change', function(event) {
+            var file = event.target.files[0];
+            var reader = new FileReader();
+            reader.onload = function(e) {
+                var csv = e.target.result;
+                var rows = csv.split('\n').map(row => row.split(','));
+                
+                // Loop through all locations and store them
+                for (let i = 1; i < rows.length; i++) {
+                    var lat = rows[i][1]; // Latitude
+                    var lng = rows[i][2]; // Longitude
+                    var name = rows[i][0]; // Name or label from the CSV (assuming the name is in the first column)
 
-          // Loop through all locations
-          for (let i = 1; i < rows.length; i++) {
-            var lat = parseFloat(rows[i][1]); // Parse latitude as float
-            var lng = parseFloat(rows[i][2]); // Parse longitude as float
+                    if (lat && lng) {
+                        locations.push({ lat: lat, lng: lng, name: name });
+                    }
+                }
+                console.log('Locations:', locations); // Check if locations are being read
+            };
+            reader.readAsText(file);
+        });
 
-            // Handle invalid lat/lng values
-            if (isNaN(lat) || isNaN(lng)) {
-              console.error('Invalid latitude or longitude in row:', i + 1);
-              continue;
+        // Function to generate isolines for all locations
+        function generateIsolines() {
+            var time = document.getElementById('time').value;
+            var travelMode = document.getElementById('travelMode').value;
+
+            if (locations.length === 0) {
+                console.error('No locations available! Make sure the file is uploaded and processed.');
+                return;
             }
 
-            var name = rows[i][0]; // Name or label from the CSV (assuming the name is in the first column)
-            generateIsoline(lat, lng, time, travelMode, name);
-          }
-        };
-        reader.readAsText(file);
-      });
+            locations.forEach(location => {
+                generateIsoline(location.lat, location.lng, time, travelMode, location.name);
+            });
+        }
 
-      var time = document.getElementById('time').value;
-      var travelMode = document.getElementById('travelMode').value;
-    }
+        // Function to generate an isoline for each location
+        function generateIsoline(lat, lng, time, travelMode, name) {
+            var url = `https://api.openrouteservice.org/v2/isochrones/${travelMode}`;
+            var data = {
+                locations: [[lng, lat]],
+                range: [time]
+            };
 
-    // Function to generate an isoline for each location
-    function generateIsoline(lat, lng, time, travelMode, name) {
-      var url = `https://api.openrouteservice.org/v2/isochrones/${travelMode}`;
-      var data = {
-        locations: [[lng, lat]],
-        range: [time]
-      };
-
-      fetch(url, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': apiKey
-        },
-        body: JSON.stringify(data)
-      })
-      .then(response => response.json())
-      .then(data => {
-        var isoline = L.geoJSON(data).addTo(map);
-        isoline.bindTooltip(name, {permanent: false, direction: 'top'}); // Show name on hover
-        map.fitBounds(isoline.getBounds());
-      })
-      .catch(error => console.error('Error:', error));
-    }
-  </script>
+            fetch(url, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': apiKey
+                },
+                body: JSON.stringify(data)
+            })
+            .then(response => response.json())
+            .then(data => {
+                var isoline = L.geoJSON(data).addTo(map);
+                isoline.bindTooltip(name, { permanent: false, direction: 'top' }); // Show name on hover
+                map.fitBounds(isoline.getBounds());
+                console.log('Isoline generated for:', name); // Log success for each location
+            })
+            .catch(error => console.error('Error:', error));
+        }
+    </script>
 </body>
 </html>
