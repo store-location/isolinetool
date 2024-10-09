@@ -8,7 +8,7 @@
     <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css" />
     <style>
         #map {
-            height: 600px;
+            height: 500px;
             width: 100%;
         }
     </style>
@@ -30,6 +30,9 @@
         <option value="driving-car">Driving</option>
     </select><br><br>
     <button onclick="generateIsolines()">Generate Isolines</button><br><br>
+
+    <!-- Download KML -->
+    <button id="downloadBtn" onclick="downloadKML()">Download KML</button><br><br>
     
     <!-- Map -->
     <div id="map"></div>
@@ -41,15 +44,18 @@
         const apiKey = '5b3ce3597851110001cf624856b457044e134081bf40f7428b9a1c68'; // Replace with your actual key
 
         // Initialize the map
-        var map = L.map('map').setView([24.62382249249716, 45.00389835077041], 7); // Default view set to Dubai
+        var map = L.map('map').setView([23.956239805959047, 45.13377153863298], 6); // Default view set to Dubai
 
         L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
             attribution: '&copy; OpenStreetMap contributors'
         }).addTo(map);
 
         let locations = [];
+        let isolineData = [];
 
-        // Move file upload handling outside the generate function
+        document.getElementById('downloadBtn').style.display = 'none'; // Hide download button initially
+
+        // Handle file upload
         document.getElementById('file').addEventListener('change', function(event) {
             var file = event.target.files[0];
             var reader = new FileReader();
@@ -67,7 +73,7 @@
                         locations.push({ lat: lat, lng: lng, name: name });
                     }
                 }
-                console.log('Locations:', locations); // Check if locations are being read
+                console.log('Locations:', locations);
             };
             reader.readAsText(file);
         });
@@ -87,7 +93,7 @@
             });
         }
 
-        // Function to generate an isoline for each location
+        // Function to generate an isoline for each location and extract polygon coordinates
         function generateIsoline(lat, lng, time, travelMode, name) {
             var url = `https://api.openrouteservice.org/v2/isochrones/${travelMode}`;
             var data = {
@@ -108,9 +114,49 @@
                 var isoline = L.geoJSON(data).addTo(map);
                 isoline.bindTooltip(name, { permanent: false, direction: 'top' }); // Show name on hover
                 map.fitBounds(isoline.getBounds());
-                console.log('Isoline generated for:', name); // Log success for each location
+
+                // Extracting the polygon coordinates properly
+                var coordinates = data.features[0].geometry.coordinates; // Adjusted access to coordinates
+                var polygonData = {
+                    name: name,
+                    coordinates: coordinates
+                };
+
+                isolineData.push(polygonData);
+                console.log('Polygon coordinates for', name, polygonData);
+
+                // Show the download button once isolines are generated
+                document.getElementById('downloadBtn').style.display = 'block';
             })
             .catch(error => console.error('Error:', error));
+        }
+
+        // Function to convert isolineData to KML and trigger download
+        function downloadKML() {
+            if (isolineData.length === 0) return;
+
+            let kmlContent = `<?xml version="1.0" encoding="UTF-8"?>\n<kml xmlns="http://www.opengis.net/kml/2.2">\n<Document>\n`;
+
+            isolineData.forEach(polygon => {
+                kmlContent += `<Placemark>\n<name>${polygon.name}</name>\n<Polygon>\n<outerBoundaryIs>\n<LinearRing>\n<coordinates>\n`;
+
+                polygon.coordinates[0].forEach(coord => {
+                    kmlContent += `${coord[0]},${coord[1]}\n`; // Excludes altitude
+                });
+
+                kmlContent += `</coordinates>\n</LinearRing>\n</outerBoundaryIs>\n</Polygon>\n</Placemark>\n`;
+            });
+
+            kmlContent += `</Document>\n</kml>`;
+
+            // Create a download link and trigger the download
+            var blob = new Blob([kmlContent], { type: 'application/vnd.google-earth.kml+xml' });
+            var link = document.createElement("a");
+            link.href = URL.createObjectURL(blob);
+            link.download = "isoline_data.kml";
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
         }
     </script>
 </body>
